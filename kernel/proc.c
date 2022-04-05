@@ -657,3 +657,18 @@ procdump(void)
     printf("\n");
   }
 }
+
+
+uint64 countProc()
+{
+  int cnt = 0;
+
+  for(int i = 0 ; i < NPROC ; i++){
+    acquire(&proc[i].lock);
+    if(proc[i].state != UNUSED)
+      cnt++;
+    release(&proc[i].lock);
+  }
+
+  return cnt;
+}
