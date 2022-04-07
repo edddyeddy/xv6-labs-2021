@@ -432,3 +432,53 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
     return -1;
   }
 }
+
+// print the page table
+void printFormatPTE(pagetable_t pagetable, int level)
+{
+  if (level > 3)
+    return;
+  // 2^9 = 512
+  for (int index = 0; index < 512; index++)
+  {
+    if (pagetable[index] & PTE_V)
+    {
+      pte_t pte = pagetable[index];
+      for (int i = 0; i < level - 1; i++)
+      {
+        printf(".. ");
+      }
+      printf("..%d: pte %p pa %p\n", index, pte, PTE2PA(pte));
+      printFormatPTE((pagetable_t)PTE2PA(pte), level + 1);
+    }
+  }
+}
+
+void vmprint(pagetable_t pagetable)
+{
+  printf("page table %p\n", pagetable);
+  // 2^9 = 512
+  printFormatPTE(pagetable, 1);
+}
+
+// Detecting which pages have been accessed
+void setBits(void *mark,int index){
+  char* charMark = (char*)mark;
+  // one char have 8 bit
+  int charNum = index / 8;
+  int bitOffset = index % 8;
+  charMark[charNum] |= (1 << bitOffset); 
+}
+void pgaccess(pagetable_t pagetable , void *base, int len, void *mark)
+{
+  // vmprint(pagetable);
+  for (int i = 0 ; i < len ; i++)
+  {
+    uint64 addr = (uint64)base + (i * PGSIZE);
+    pte_t *pte = walk(pagetable, addr, 0);
+    if(*pte & PTE_A){
+      setBits(mark,i);
+      (*pte) &= ~PTE_A;
+    }
+  }
+}

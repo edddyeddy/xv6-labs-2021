@@ -77,10 +77,25 @@ sys_sleep(void)
 
 
 #ifdef LAB_PGTBL
-int
+uint64
 sys_pgaccess(void)
 {
   // lab pgtbl: your code here.
+  struct proc *p = myproc();
+  uint64 base , mark;
+  int len;
+  if(argaddr(0, &base) < 0 || argint(1,&len) < 0 || argaddr(2,&mark) < 0)
+    return -1;
+  // MAXLEN = 1024 = 2^6*2^4
+  uint64 accInfo[16];
+  memset(accInfo,0,sizeof(uint64) * 16);
+  pgaccess(p->pagetable,(void *)base,len,(void *)accInfo);
+
+  // printf("sys mark = %p\n",accInfo[0]);
+
+  if(copyout(p->pagetable,mark,(char*)accInfo,(len + 8) / 8) < 0)
+    return -1;
+
   return 0;
 }
 #endif
