@@ -1,0 +1,12 @@
+1. 
+    a0 a1 a2....  a2 holds 13 in main's call to printf
+2. 
+    26:	45b1    li	a1,12
+3.
+    0x640
+4.
+    0x38
+5.
+    He110 Word
+6.
+    the data above int 3 in the stack
