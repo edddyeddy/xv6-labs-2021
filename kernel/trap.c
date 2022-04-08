@@ -78,7 +78,22 @@ usertrap(void)
 
   // give up the CPU if this is a timer interrupt.
   if(which_dev == 2)
+  {
+    if(p->interval)
+      p->passTick++;
+
+    if(p->interval && !p->inHandler && p->passTick >= p->interval){
+      // save the trapframe for return to the interrupted program
+      memmove(&p->preTrapframe,p->trapframe,sizeof(struct trapframe));
+      // prevent re-entrant 
+      p->inHandler = 1;
+
+      p->trapframe->epc = p->handler;
+    }
+
     yield();
+  }
+    
 
   usertrapret();
 }
