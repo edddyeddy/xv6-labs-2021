@@ -185,6 +185,16 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
       uint64 pa = PTE2PA(*pte);
       kfree((void*)pa);
     }
+    else
+    {
+      uint64 pa = PTE2PA(*pte);
+      if(KERNBASE <= pa && pa < KERNBASE + PHYSIZE){
+        acquire(&refLock);
+        pageReference[PGREFERENCE(pa)]--;
+        release(&refLock);
+      }
+    }
+    
     *pte = 0;
   }
 }
@@ -504,9 +514,7 @@ int copyOnWrite(pagetable_t pagetable,uint64 va){
       printf("cow remap fault \n");
     }
 
-    acquire(&refLock);
-    pageReference[PGREFERENCE(pa)]--;
-    release(&refLock);
+    kfree((void*)pa);
   }
 
   return 0;

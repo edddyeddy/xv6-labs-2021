@@ -64,7 +64,7 @@ kfree(void *pa)
     release(&refLock);
     return;
   }
-  release(&refLock);
+  // release(&refLock);
 
   // Fill with junk to catch dangling refs.
   memset(pa, 1, PGSIZE);
@@ -76,7 +76,7 @@ kfree(void *pa)
   kmem.freelist = r;
   release(&kmem.lock);
 
-  acquire(&refLock);
+  // acquire(&refLock);
   if(pageReference[PGREFERENCE(pa)] != 0) {
     pageReference[PGREFERENCE(pa)]--;
   }
