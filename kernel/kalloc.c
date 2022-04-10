@@ -95,14 +95,16 @@ kalloc(void)
   acquire(&kmem.lock);
   r = kmem.freelist;
   if(r)
-  {
     kmem.freelist = r->next;
-    pageReference[PGREFERENCE(r)] = 1;
-  }
   release(&kmem.lock);
 
   if(r)
+  {
+    acquire(&refLock);
+    pageReference[PGREFERENCE(r)] = 1;
+    release(&refLock);
     memset((char*)r, 5, PGSIZE); // fill with junk
-
+  }
+  
   return (void*)r;
 }

@@ -73,7 +73,6 @@ usertrap(void)
   
     uint64 faultAddress = r_stval();
     if(copyOnWrite(p->pagetable,PGROUNDDOWN(faultAddress)) < 0){
-      printf("trap : cow fault \n");
       p->killed = 1;
     }
     

@@ -358,6 +358,9 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 
     va0 = PGROUNDDOWN(dstva);
     // copy on write
+    if(va0 > MAXVA)
+      return -1;
+      
     if((pte = walk(pagetable,va0,0)) == 0){
       printf("copyout : walk fault\n");
       return -1;
@@ -460,6 +463,8 @@ int copyOnWrite(pagetable_t pagetable,uint64 va){
   uint64 mem;
 
   // printf("debug copyOnWrite %p\n",va);
+  if(va >= MAXVA)
+    return -1;
 
   if((pte = walk(pagetable,va,0)) == 0){
     printf("vm.c : cow walk fault, pte = %p , va = %p\n",*pte , va);
@@ -485,7 +490,7 @@ int copyOnWrite(pagetable_t pagetable,uint64 va){
   {
     release(&refLock);
     // copy phymemory content to another page
-    if((mem = (uint64)kalloc()) < 0){
+    if((mem = (uint64)kalloc()) == 0){
         return -1;
     }
 
