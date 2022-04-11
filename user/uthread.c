@@ -1,6 +1,7 @@
 #include "kernel/types.h"
 #include "kernel/stat.h"
 #include "user/user.h"
+#include "user/uthread.h"
 
 /* Possible states of a thread: */
 #define FREE        0x0
@@ -14,6 +15,7 @@
 struct thread {
   char       stack[STACK_SIZE]; /* the thread's stack */
   int        state;             /* FREE, RUNNING, RUNNABLE */
+  struct ucontext ucontext;      // user context
 };
 struct thread all_thread[MAX_THREAD];
 struct thread *current_thread;
@@ -62,6 +64,13 @@ thread_schedule(void)
      * Invoke thread_switch to switch from t to next_thread:
      * thread_switch(??, ??);
      */
+
+    // for(int i = 0 ; i < MAX_THREAD ; i++){
+    //   printf("%d ",all_thread[i].state);
+    // }
+    // printf("\n");
+
+    thread_switch((uint64)&t->ucontext,(uint64)&next_thread->ucontext);
   } else
     next_thread = 0;
 }
@@ -76,6 +85,9 @@ thread_create(void (*func)())
   }
   t->state = RUNNABLE;
   // YOUR CODE HERE
+  // remember stack group from up to down 
+  t->ucontext.sp = (uint64)t->stack + STACK_SIZE;
+  t->ucontext.ra = (uint64)func;
 }
 
 void 
