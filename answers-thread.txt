@@ -1,0 +1,1 @@
+because more than one thread enter into the critical section. Therefore it will make data mistake. 
