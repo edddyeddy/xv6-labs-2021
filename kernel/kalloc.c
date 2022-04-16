@@ -76,13 +76,14 @@ kalloc(void)
 
   push_off();
   int cpuID = cpuid();
-  pop_off();
 
   acquire(&kmem[cpuID].lock);
   r = kmem[cpuID].freelist;
   if(r)
     kmem[cpuID].freelist = r->next;
   release(&kmem[cpuID].lock);
+
+  pop_off();
 
   // steal memory from other cpu
   if(!r){
