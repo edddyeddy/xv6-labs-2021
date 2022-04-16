@@ -8,6 +8,7 @@
 #include "spinlock.h"
 #include "riscv.h"
 #include "defs.h"
+#include "kernel/param.h"
 
 void freerange(void *pa_start, void *pa_end);
 
@@ -21,12 +22,14 @@ struct run {
 struct {
   struct spinlock lock;
   struct run *freelist;
-} kmem;
+} kmem[NCPU];
 
 void
 kinit()
 {
-  initlock(&kmem.lock, "kmem");
+  for(int i = 0 ; i < NCPU ; i++){
+    initlock(&kmem[i].lock, "kmem");
+  }
   freerange(end, (void*)PHYSTOP);
 }
 
@@ -54,12 +57,13 @@ kfree(void *pa)
   // Fill with junk to catch dangling refs.
   memset(pa, 1, PGSIZE);
 
+  int cpuID = ((uint64)pa / PGSIZE) % NCPU;
   r = (struct run*)pa;
-
-  acquire(&kmem.lock);
-  r->next = kmem.freelist;
-  kmem.freelist = r;
-  release(&kmem.lock);
+  
+  acquire(&kmem[cpuID].lock);
+  r->next = kmem[cpuID].freelist;
+  kmem[cpuID].freelist = r;
+  release(&kmem[cpuID].lock);
 }
 
 // Allocate one 4096-byte page of physical memory.
@@ -70,11 +74,32 @@ kalloc(void)
 {
   struct run *r;
 
-  acquire(&kmem.lock);
-  r = kmem.freelist;
+  push_off();
+  int cpuID = cpuid();
+  pop_off();
+
+  acquire(&kmem[cpuID].lock);
+  r = kmem[cpuID].freelist;
   if(r)
-    kmem.freelist = r->next;
-  release(&kmem.lock);
+    kmem[cpuID].freelist = r->next;
+  release(&kmem[cpuID].lock);
+
+  // steal memory from other cpu
+  if(!r){
+    for(int i = 0 ; i < NCPU ; i++){
+      if(i == cpuID) continue;
+
+      acquire(&kmem[i].lock);
+      r = kmem[i].freelist;
+      if(r){
+        kmem[i].freelist = r->next;
+        release(&kmem[i].lock);
+        break;
+      }
+      release(&kmem[i].lock);
+
+    }
+  }
 
   if(r)
     memset((char*)r, 5, PGSIZE); // fill with junk
