@@ -51,7 +51,7 @@ getEmptyBlockInBucket(int hash, uint64 *minTime , struct buf **LRUBuf){
       acquiresleep(&b->lock);
       return b;
     }
-    if(minTime && b->timeStamp < *minTime){
+    if(minTime && b->refcnt == 0 && b->timeStamp < *minTime){
       *minTime = b->timeStamp;
       *LRUBuf = b;
     }
@@ -134,10 +134,16 @@ bget(uint dev, uint blockno)
       b->blockno = blockno;
       b->timeStamp = ticks;
       // insert the block to list
+      if(hash != i){
+        acquire(&bcache.bucketLock[hash]);
+      }
       b->next = bcache.head[hash].next;
       b->prev = &bcache.head[hash];
       bcache.head[hash].next->prev = b; 
       bcache.head[hash].next = b;
+      if(hash != i){
+        release(&bcache.bucketLock[hash]);
+      }
       // release block
       release(&bcache.bucketLock[i]);
       return b;
@@ -163,10 +169,10 @@ bget(uint dev, uint blockno)
 
   // insert the block to list
   acquire(&bcache.bucketLock[hash]);
-  b->next = bcache.head[hash].next;
-  b->prev = &bcache.head[hash];
-  bcache.head[hash].next->prev = b; 
-  bcache.head[hash].next = b;
+  LRUBuf->next = bcache.head[hash].next;
+  LRUBuf->prev = &bcache.head[hash];
+  bcache.head[hash].next->prev = LRUBuf; 
+  bcache.head[hash].next = LRUBuf;
   release(&bcache.bucketLock[hash]);
   
   release(&bcache.lock);
@@ -213,10 +219,6 @@ brelse(struct buf *b)
 
   acquire(&bcache.bucketLock[hash]);
   b->refcnt--;
-  if (b->refcnt == 0) {
-    // no one is waiting for it.
-    b->valid = 0;
-  }
   release(&bcache.bucketLock[hash]);
 }
 
