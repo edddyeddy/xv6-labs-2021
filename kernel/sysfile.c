@@ -18,7 +18,7 @@
 
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.
-static int
+int
 argfd(int n, int *pfd, struct file **pf)
 {
   int fd;
@@ -483,4 +483,123 @@ sys_pipe(void)
     return -1;
   }
   return 0;
+}
+
+
+uint64
+sys_mmap(void)
+{
+  uint64 length;
+  int prot , flags;
+  struct file *file;
+  if(argaddr(1,&length) <0 || argint(2,&prot) < 0 || 
+     argint(3,&flags) < 0  || argfd(4,0,&file) < 0)
+    return -1;
+
+  struct proc *p = myproc();
+
+  // find the end of file map address space
+  uint64 maxEndAddr = FILEMAPSTART;
+  for(int i = 0 ; i < NVMA ; i++){
+    if(p->vma[i].valid && p->vma[i].startAddress + p->vma[i].length > maxEndAddr)
+      maxEndAddr = p->vma[i].startAddress + p->vma[i].length;
+  }
+
+  uint64 startAddress = PGROUNDDOWN(maxEndAddr + PGSIZE - 1);
+
+  uint perm = PTE_U;
+  if(prot & PROT_READ){
+    if(file->readable)
+      perm |= PTE_R;
+    else return -1;
+  }
+  
+  if(prot & PROT_WRITE){
+    if(file->writable || flags & MAP_PRIVATE)
+      perm |= PTE_W;
+    else return -1;
+  }
+    
+
+  filedup(file);
+
+  for(int i = 0 ; i < NVMA ; i++){
+    if(p->vma[i].valid == 0){
+      p->vma[i].valid = 1;
+      p->vma[i].startAddress = startAddress;
+      p->vma[i].fileStart = startAddress;
+      p->vma[i].file = file;
+      p->vma[i].length = length;
+      p->vma[i].perm = perm;
+      p->vma[i].flag = flags;
+      return startAddress;
+    }
+  }
+
+  // mmap fail
+  fileclose(file);
+
+  return -1;
+}
+
+uint64
+sys_munmap(void)
+{
+  struct proc *p = myproc();
+  uint64 address;
+  int length;
+  if(argaddr(0,&address) < 0 || argint(1,&length) < 0)
+    return -1;
+
+  // find the unmap vma
+  struct VMA *vma = 0;
+  for(int i = 0 ; i < NVMA ; i++){
+    if( p->vma[i].valid &&
+        p->vma[i].startAddress <= address && 
+        address + length - 1 < p->vma[i].startAddress + p->vma[i].length){
+
+      vma = &p->vma[i];
+      break;
+    }
+  }
+
+  // fault : vma not find 
+  if(!vma)
+    return -1;
+
+  // if map share and mapped , write back the modified data
+  unmapfile(p->pagetable,vma,address,length);
+
+  return 0;
+}
+
+void unmapfile(pagetable_t pagetable, struct VMA *vma, uint64 address , int length){
+  struct inode *ip = vma->file->ip;
+  for(uint64 blockAddress = address ; blockAddress < address + length ; blockAddress += PGSIZE){
+    uint64 contentAddress = walkaddr(pagetable,blockAddress);
+    // write back
+    if(contentAddress && vma->flag & MAP_SHARED){
+      uint64 offset = blockAddress - vma->fileStart;
+      begin_op();
+      ilock(ip);
+      writei(ip, 0, contentAddress, offset, PGSIZE);
+      iunlock(ip);
+      end_op();      
+    }
+
+    // unmap , mapped into memory
+    if(contentAddress){
+      uvmunmap(pagetable,blockAddress,1,1);
+    }
+  }
+
+  if(address == vma->startAddress){
+    vma->startAddress += length;
+  }
+  vma->length -= length;
+
+  if(vma->length == 0){
+    fileclose(vma->file);
+    vma->valid = 0;
+  }
 }

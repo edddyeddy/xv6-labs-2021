@@ -5,6 +5,9 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "fs.h"
+#include "sleeplock.h"
+#include "file.h"
 
 struct spinlock tickslock;
 uint ticks;
@@ -65,7 +68,48 @@ usertrap(void)
     intr_on();
 
     syscall();
-  } else if((which_dev = devintr()) != 0){
+  }else if(r_scause() == 13 || r_scause() == 15){
+    // page fault
+    uint64 address = PGROUNDDOWN(r_stval());
+    struct VMA* vma = 0;
+
+    for(int i = 0 ; i < NVMA ; i++){
+      if(p->vma[i].valid &&
+         p->vma[i].startAddress <= address &&
+         address < p->vma[i].startAddress + p->vma[i].length){
+        vma = &p->vma[i];
+        break;
+      }
+    }
+
+    if(vma){
+      // read file from disk and map to address space
+      uint64 page;
+      if((page = (uint64)kalloc()) < 0){
+        panic("bad kalloc");
+      }
+
+      memset((void*)page,'\0', PGSIZE);
+      struct inode* ip = vma->file->ip;
+      uint64 offset = address - vma->startAddress;
+
+      ilock(ip);
+      if(readi(ip,0,page,offset,PGSIZE) < 0){
+        panic("trap : readi error\n");
+      }
+      iunlock(ip);
+      
+      if(mappages(p->pagetable,address,PGSIZE,page,vma->perm) < 0){
+        panic("trap : mappages error\n");
+      }
+
+    }else{
+      printf("page fault\n");
+      p->killed = 1;
+    }
+
+
+  }else if((which_dev = devintr()) != 0){
     // ok
   } else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);

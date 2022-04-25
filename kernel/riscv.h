@@ -361,6 +361,7 @@ sfence_vma()
 // Sv39, to avoid having to sign-extend virtual addresses
 // that have the high bit set.
 #define MAXVA (1L << (9 + 9 + 9 + 12 - 1))
+#define FILEMAPSTART (1L << (9 + 9 + 12))
 
 typedef uint64 pte_t;
 typedef uint64 *pagetable_t; // 512 PTEs
